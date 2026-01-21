@@ -44,32 +44,37 @@ def extract_entities(llm, text: str) -> Dict[str, Any]:
     if content.startswith("```"):
         content = content.replace("```json", "").replace("```", "").strip()
     try:
-        parsed = json.loads(content)
+        return json.loads(content)
     except:
-        parsed = {}
-    return parsed
+        return {}
 
 def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
     initialize_booking_state(session_state)
     booking_info = session_state.booking_info
     text = user_input.strip()
+    text_lower = text.lower()
 
     if not text:
         return "Please type something."
-    
-    text_lower = text.lower()
-    
-    if text_lower in ["hi", "hello", "hey", "start", "help"]:
+
+    if text_lower in ["hi", "hello", "hey", "start", "help"] and not booking_info["greeted"]:
+        booking_info["greeted"] = True
         return "Hello! To book, type something like 'Book hotel on 12-12-2023 at 9:00' or ask PDF questions like 'What is the hotel price?'"
 
-
-    if "cancel" in text.lower() or "no" in text.lower():
+    if text_lower in ["cancel", "no"]:
         session_state.booking_info = {k: None for k in REQUIRED_FIELDS}
         session_state.booking_info["greeted"] = True
         return "Booking cancelled. Start again anytime."
 
     if "rag_pipeline" in session_state:
-        if any(word in text.lower() for word in ["price", "cost", "available", "service", "policy","room","appointment","hours","location"]):
+        llm = session_state.rag_pipeline.llm
+        extracted = extract_entities(llm, text)
+        for k, v in extracted.items():
+            if v:
+                booking_info[k] = v
+
+    if "rag_pipeline" in session_state:
+        if any(word in text_lower for word in ["price", "cost", "available", "service", "policy", "room", "appointment", "hours", "location"]):
             vs = session_state.rag_pipeline.vector_store
             if vs:
                 return session_state.rag_pipeline.query(text)
@@ -84,24 +89,12 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
         booking_info["date"] = text
     elif is_time(text):
         booking_info["time"] = text
-    elif not booking_info["name"]:
+    elif not booking_info["name"] and text.replace(" ", "").isalpha():
         booking_info["name"] = text
-    elif not booking_info["booking_type"]:
-        booking_info["booking_type"] = text.lower()
-
-    if "rag_pipeline" in session_state:
-        llm = session_state.rag_pipeline.llm
-        extracted = extract_entities(llm, text)
-        for k, v in extracted.items():
-            if v and not booking_info.get(k):
-                booking_info[k] = v
 
     missing = [f for f in REQUIRED_FIELDS if not booking_info.get(f)]
 
     if missing:
-        if not booking_info["greeted"]:
-            booking_info["greeted"] = True
-            return "Hello! To book, type something like 'Book hotel on 12-12-2023 at 9:00' or ask PDF questions like 'What is the hotel price?'"
         hints = []
         for f in missing:
             if f == "email":
@@ -112,22 +105,38 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
                 hints.append("date (DD-MM-YYYY)")
             elif f == "time":
                 hints.append("time (HH:MM)")
+            elif f == "name":
+                hints.append("your full name")
             else:
                 hints.append(f)
         return f"Please provide: {', '.join(hints[:3])}"
 
-    if text.lower() in ["yes", "confirm"]:
+    if text_lower in ["yes", "confirm"]:
         try:
             from database import insert_customer, insert_booking
             from send_email import send_professional_email
 
-            customer_id = insert_customer(booking_info["name"], booking_info["email"], booking_info["phone"])
-            booking_id = insert_booking(customer_id, booking_info["booking_type"], booking_info["date"], booking_info["time"])
-            send_professional_email(
-                booking_info["email"], booking_info["name"],
-                booking_info["booking_type"], booking_info["date"],
-                booking_info["time"], booking_id or "DEMO-123"
+            customer_id = insert_customer(
+                booking_info["name"],
+                booking_info["email"],
+                booking_info["phone"]
             )
+            booking_id = insert_booking(
+                customer_id,
+                booking_info["booking_type"],
+                booking_info["date"],
+                booking_info["time"]
+            )
+
+            send_professional_email(
+                booking_info["email"],
+                booking_info["name"],
+                booking_info["booking_type"],
+                booking_info["date"],
+                booking_info["time"],
+                booking_id or "DEMO-123"
+            )
+
             session_state.booking_info = {k: None for k in REQUIRED_FIELDS}
             session_state.booking_info["greeted"] = True
             return f"Booking confirmed! Booking ID: {booking_id or 'DEMO-123'}"
@@ -137,13 +146,13 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
             return "Demo booking confirmed."
 
     return f"""
-            Review details:
-            Name: {booking_info['name']}
-            Email: {booking_info['email']}
-            Phone: {booking_info['phone']}
-            Service: {booking_info['booking_type']}
-            Date: {booking_info['date']}
-            Time: {booking_info['time']}
+Review details:
+Name: {booking_info['name']}
+Email: {booking_info['email']}
+Phone: {booking_info['phone']}
+Service: {booking_info['booking_type']}
+Date: {booking_info['date']}
+Time: {booking_info['time']}
 
-            Type "yes" to confirm or "cancel" to stop
-        """
+Type "yes" to confirm or "cancel" to stop
+"""

@@ -32,7 +32,7 @@ def send_professional_email(email: str, name: str, booking_type: str, date: str,
                     </div>
                     
                     <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 12px; margin: 30px 0;">
-                        <p style="margin: 0 0 10px 0; color: #666;">Thank you for choosing us! 🎉</p>
+                        <p style="margin: 0 0 10px 0; color: #666;">Thank you for choosing us! </p>
                         <p style="margin: 0; font-size: 0.9em; color: #999;">We'll send you a reminder 24 hours before</p>
                     </div>
                 </div>

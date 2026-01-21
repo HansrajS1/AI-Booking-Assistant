@@ -6,75 +6,79 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import RetrievalQA
 from langchain_groq import ChatGroq
 from langchain_community.document_loaders import PyMuPDFLoader  
+from langchain.prompts import PromptTemplate
 import tempfile
 from config import GROQ_API_KEY
 
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 class RAGPipeline:
     def __init__(self):
         self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         self.llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
         self.vector_store = None
-        self.documents = []
-    
+        self.qa_chain = None
+
     def ingest_pdfs(self, pdf_files):
         st.info(f" Processing {len(pdf_files)} PDF(s)...")
-        
-        self.documents = []
-        self.vector_store = None
-        
-        for i, pdf_file in enumerate(pdf_files):
+        documents = []
+
+        for pdf_file in pdf_files:
+            tmp_path = None
             try:
                 pdf_bytes = pdf_file.read()
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
                     tmp_file.write(pdf_bytes)
                     tmp_path = tmp_file.name
+
                 loader = PyMuPDFLoader(tmp_path)
                 docs = loader.load()
-                
-                splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=1000, 
-                    chunk_overlap=200
-                )
-                splits = splitter.split_documents(docs)
-                self.documents.extend(splits)
-                
-                st.success(f" {pdf_file.name} → {len(splits)} chunks")
-                
-            except Exception as e:
-                st.error(f" {pdf_file.name}: {str(e)}")
+
+                splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+                documents.extend(splitter.split_documents(docs))
+                st.success(f" {pdf_file.name} → {len(docs)} pages, {len(splitter.split_documents(docs))} chunks")
             finally:
-                if 'tmp_path' in locals():
+                if tmp_path and os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-        
-        if self.documents:
-            self.vector_store = FAISS.from_documents(self.documents, self.embeddings)
-            st.success(f"RAG READY! {len(self.documents)} chunks indexed!")
-            return True
-        return False
-    
-    def query(self, question: str):
-        if not self.vector_store:
-            return " Upload PDFs first (sidebar) → Click PROCESS → Ask questions!"
-        
-        prompt_template = """
-        You are a helpful service assistant. Answer using ONLY the PDF context below.
 
-        CONTEXT: {context}
+        if not documents:
+            st.warning("No text extracted from PDFs.")
+            return False
 
-        QUESTION: {question}
+        self.vector_store = FAISS.from_documents(documents, self.embeddings)
 
-        If question mentions booking → end with: "Say 'book [service]' to book now!"
+        prompt = PromptTemplate(
+            input_variables=["context", "question"],
+            template="""
+You are a helpful service assistant. Answer using ONLY the PDF context below.
 
-        Answer concisely:
-        """
+CONTEXT:
+{context}
 
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",
-            retriever=self.vector_store.as_retriever(search_kwargs={"k": 4}),
-            chain_type_kwargs={"prompt": prompt_template}
+QUESTION:
+{question}
+
+If question mentions booking, end with: "Say 'book [service]' to book now!"
+
+Answer concisely.
+"""
         )
-        
-        result = qa_chain.run(question)
-        return result
+
+        self.qa_chain = RetrievalQA.from_chain_type(
+            llm=self.llm,
+            retriever=self.vector_store.as_retriever(search_kwargs={"k": 4}),
+            chain_type="stuff",
+            chain_type_kwargs={"prompt": prompt}
+        )
+
+        st.success(f"RAG READY! {len(documents)} chunks indexed!")
+        return True
+
+    def query(self, question: str):
+        if not self.qa_chain:
+            return " Upload PDFs first → Click PROCESS → Ask questions!"
+        try:
+            return self.qa_chain.run(question)
+        except Exception as e:
+            st.error(f"Groq API error: {str(e)}")
+            return "Error querying the LLM. Check your API key or PDF content."

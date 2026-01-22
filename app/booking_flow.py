@@ -5,6 +5,13 @@ import re
 from datetime import datetime
 
 REQUIRED_FIELDS = ["name", "email", "phone", "booking_type", "date", "time"]
+GREETINGS = {
+    "hi", "hello", "hey", "hii", "yo",
+    "start", "help", "please",
+    "good morning", "good evening", "good afternoon"
+}
+
+
 
 ENTITY_PROMPT = """
 Extract booking details from the message.
@@ -34,7 +41,7 @@ def is_email(text: str):
     return re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", text)
 
 def is_phone(text: str):
-    return re.match(r"^\d{10,12}$", text)
+    return re.match(r"^\+?\d{10,15}$", text)
 
 def is_date(text: str):
     try:
@@ -71,22 +78,29 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
         return "Please type something."
     
     email_match = re.search(r"\S+@\S+", text)
-    phone_match = re.search(r"\d{10,12}", text)
+    phone_match = re.search(r"\+?\d{10,15}", text)
     date_match = re.search(r"\b\d{2}-\d{2}-\d{4}\b", text)
     time_match = re.search(r"\b\d{1,2}:\d{2}\b", text)
 
+    
     if email_match and not is_email(email_match.group()):
         return "Invalid email. Enter a valid email (e.g., user@email.com)."
     if phone_match and not is_phone(phone_match.group()):
-        return "Invalid phone. Enter exactly 10-12 digits."
+        return "Invalid phone. Enter exactly 10-15 digits."
     if date_match and not is_date(date_match.group()):
         return "Invalid date. Enter a valid future date in DD-MM-YYYY format (within 2 years)."
     if time_match and not is_time(time_match.group()):
         return "Invalid time. Enter time in 24-hour HH:MM format."
 
-    if text_lower in ["hi", "hello", "hey", "start", "help"] and not booking_info["greeted"]:
+    if (
+    not booking_info["greeted"]
+    and any(greet in text_lower for greet in GREETINGS)):
         booking_info["greeted"] = True
-        return "Hello! To book, type something like 'Book hotel on 12-12-2026 at 09:00' or ask PDF questions like 'What is the hotel price?'"
+        return (
+        "Hello! Please provide your full name and then enter your booking details.\n"
+        "Example: Book a hotel on 12-12-2026 at 09:00\n"
+        "You can also ask PDF questions like: What is the hotel price?")
+
 
     if text_lower in ["cancel", "no"]:
         session_state.booking_info = {k: None for k in REQUIRED_FIELDS}
@@ -116,7 +130,9 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
         booking_info["date"] = text
     elif is_time(text):
         booking_info["time"] = text
-    elif not booking_info["name"] and text.replace(" ", "").isalpha():
+    elif not booking_info["name"]:
+        if len(text.split()) < 2 or not all(word.isalpha() for word in text.split()):
+            return "Please enter your full name (e.g., Hansraj Singh)."
         booking_info["name"] = text
     elif not booking_info["booking_type"]:
         booking_info["booking_type"] = text_lower
@@ -129,7 +145,7 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
             if f == "email":
                 hints.append("email (e.g., user@email.com)")
             elif f == "phone":
-                hints.append("phone (10-12 digits)")
+                hints.append("phone (10-15 digits)")
             elif f == "date":
                 hints.append("date (DD-MM-YYYY)")
             elif f == "time":
@@ -175,13 +191,12 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
             return "Demo booking confirmed."
 
     return f"""
-Review details:
-Name: {booking_info['name']}
-Email: {booking_info['email']}
-Phone: {booking_info['phone']}
-Service: {booking_info['booking_type']}
-Date: {booking_info['date']}
-Time: {booking_info['time']}
-
-Type "yes" to confirm or "cancel" to stop
-"""
+            Review details:
+            Name: {booking_info['name']}
+            Email: {booking_info['email']}
+            Phone: {booking_info['phone']}
+            Service: {booking_info['booking_type']}
+            Date: {booking_info['date']}
+            Time: {booking_info['time']}
+            Type "yes" to confirm or "cancel" to stop
+            """

@@ -50,18 +50,18 @@ class RAGPipeline:
         prompt = PromptTemplate(
             input_variables=["context", "question"],
             template="""
-You are a helpful service assistant. Answer using ONLY the PDF context below.
+            You are a helpful service assistant. Answer using ONLY the PDF context below.
 
-CONTEXT:
-{context}
+            CONTEXT:
+            {context}
 
-QUESTION:
-{question}
+            QUESTION:
+           {question}
 
-If question mentions booking, end with: "Say 'book [service]' to book now!"
+        If question mentions booking, end with: "Say 'book [service]' to book now!"
 
-Answer concisely.
-"""
+        Answer concisely.
+        """
         )
 
         self.qa_chain = RetrievalQA.from_chain_type(

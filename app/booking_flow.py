@@ -45,14 +45,20 @@ def is_phone(text: str):
 
 def is_date(text: str):
     try:
-        d = datetime.strptime(text, "%Y-%m-%d")
-        today = datetime.now().date()
-        if d.date() < today:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
             return False
+
+        d = datetime.strptime(text, "%Y-%m-%d").date()
+        today = datetime.now().date()
+
+        if d < today:
+            return False
+
         if d.year > today.year + 2:
             return False
+
         return True
-    except:
+    except ValueError:
         return False
 
 def is_time(text: str):

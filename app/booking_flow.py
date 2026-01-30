@@ -24,7 +24,7 @@ Rules:
 - Use null if missing
 - booking_type must be one word (hotel, doctor, spa, salon, restaurant,service)
 - Do not explain anything
-- Ensure date is in DD-MM-YYYY format
+- Ensure date is in YYYY-MM-DD format
 - Ensure time is in HH:MM 24-hour format
 - Ensure email is valid format
 
@@ -45,7 +45,7 @@ def is_phone(text: str):
 
 def is_date(text: str):
     try:
-        d = datetime.strptime(text, "%d-%m-%Y")
+        d = datetime.strptime(text, "%Y-%m-%d")
         today = datetime.now().date()
         if d.date() < today:
             return False
@@ -79,7 +79,7 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
     
     email_match = re.search(r"\S+@\S+", text)
     phone_match = re.search(r"\+?\d{10,15}", text)
-    date_match = re.search(r"\b\d{2}-\d{2}-\d{4}\b", text)
+    date_match = re.search(r"\b\d{4}-\d{2}-\d{2}\b", text)
     time_match = re.search(r"\b\d{1,2}:\d{2}\b", text)
 
     
@@ -88,7 +88,7 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
     if phone_match and not is_phone(phone_match.group()):
         return "Invalid phone. Enter exactly 10-15 digits."
     if date_match and not is_date(date_match.group()):
-        return "Invalid date. Enter a valid future date in DD-MM-YYYY format (within 2 years)."
+        return "Invalid date. Enter a valid future date in YYYY-MM-DD format (within 2 years)."
     if time_match and not is_time(time_match.group()):
         return "Invalid time. Enter time in 24-hour HH:MM format."
 
@@ -98,7 +98,7 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
         booking_info["greeted"] = True
         return (
         "Hello! Please provide your full name and then enter your booking details.\n"
-        "Example: Book a hotel on 12-12-2026 at 09:00\n"
+        "Example: Book a hotel on 2026-12-12 at 09:00\n"
         "You can also ask PDF questions like: What is the hotel price?")
 
 
@@ -147,7 +147,7 @@ def process_message(user_input: str, session_state: Dict[str, Any]) -> str:
             elif f == "phone":
                 hints.append("phone (10-15 digits)")
             elif f == "date":
-                hints.append("date (DD-MM-YYYY)")
+                hints.append("date (YYYY-MM-DD)")
             elif f == "time":
                 hints.append("time (HH:MM)")
             elif f == "name":

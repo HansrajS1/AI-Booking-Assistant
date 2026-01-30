@@ -1,7 +1,6 @@
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from config import SENDGRID_API_KEY, FROM_EMAIL
-import streamlit as st
 
 def send_professional_email(email: str, name: str, booking_type: str, date: str, time: str, booking_id: str):
     """Beautiful SendGrid booking confirmation"""

@@ -1,4 +1,8 @@
 # AI Booking Assistant 
+AI-powered conversational booking system that handles Hotels, Doctor appointments, Restaurant tables, Spa, Salon, Events & Classes through natural language chat.
+6-step flow → Supabase DB + SendGrid emails + optional PDF RAG.
+
+live link : https://ai-booking-assistant.streamlit.app/
 
 Installation
 
